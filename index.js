@@ -1,7 +1,13 @@
+import rc from 'rc';
+import debug from 'debug';
+import { createSocket } from 'dgram';
+import { parse as dnsParse } from 'native-dns-packet';
+import { createAnswer, records, listAnswer } from './util.js';
+
 var PORT = process.env.PORT || 53
 var EXTERNAL_DNS = process.env.EXTERNAL_DNS || '8.8.8.8,8.8.4.4'
 
-var opts = require('rc')('dnsproxy', {
+const opts = rc('dnsproxy', {
   host: '0.0.0.0',
   logging: 'dnsproxy:query',
   domains: {
@@ -24,17 +30,13 @@ var d = process.env.DEBUG.split(',')
 d.push('dnsproxy:error')
 process.env.DEBUG = d.join(',')
 
-var dgram = require('dgram')
-var packet = require('native-dns-packet')
-var util = require('./util.js')
-
-var logdebug = require('debug')('dnsproxy:debug')
-var logquery = require('debug')('dnsproxy:query')
-var logerror = require('debug')('dnsproxy:error')
+const logdebug = debug('dnsproxy:debug');
+const logquery = debug('dnsproxy:query');
+const logerror = debug('dnsproxy:error');
 
 logdebug('options: %j', opts)
 
-var server = dgram.createSocket('udp4')
+const server = createSocket('udp4');
 
 server.on('listening', () => {
   var address = server.address();
@@ -49,7 +51,7 @@ server.on('message', function (message, rinfo) {
   var nameserver = opts.nameservers[0]
   var returner = false
 
-  var query = packet.parse(message)
+  const query = dnsParse(message);
   var domain = query.question[0].name
   var type = query.question[0].type
 
@@ -64,7 +66,7 @@ server.on('message', function (message, rinfo) {
 
       logquery('type: host, domain: %s, answer: %s', domain, opts.hosts[h])
 
-      var res = util.createAnswer(query, answer)
+      const res = createAnswer(query, answer);
       server.send(res, 0, res.length, rinfo.port, rinfo.address)
 
       returner = true
@@ -87,7 +89,7 @@ server.on('message', function (message, rinfo) {
 
       logquery('type: server, domain: %s, answer: %s', domain, opts.domains[s])
 
-      var res = util.createAnswer(query, answer)
+      const res = createAnswer(query, answer);
       server.send(res, 0, res.length, rinfo.port, rinfo.address)
 
       returner = true
@@ -106,7 +108,7 @@ server.on('message', function (message, rinfo) {
 
   var fallback
   (function queryns (message, nameserver) {
-    var sock = dgram.createSocket('udp4')
+    const sock = createSocket('udp4');
     sock.send(message, 0, message.length, 53, nameserver, function () {
       fallback = setTimeout(function () {
         queryns(message, opts.nameservers[0])
@@ -118,7 +120,7 @@ server.on('message', function (message, rinfo) {
     })
     sock.on('message', function (response) {
       clearTimeout(fallback)
-      logquery('type: primary, nameserver: %s, query: %s, type: %s, answer: %s', nameserver, domain, util.records[type] || 'unknown', util.listAnswer(response))
+      logquery('type: primary, nameserver: %s, query: %s, type: %s, answer: %s', nameserver, domain, records[type] || 'unknown', listAnswer(response));
       server.send(response, 0, response.length, rinfo.port, rinfo.address)
       sock.close()
     })

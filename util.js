@@ -1,6 +1,6 @@
-var packet = require('native-dns-packet')
+import { parse, write } from 'native-dns-packet';
 
-module.exports.records = {
+export const records = {
   '1': 'A',
   '2': 'NS',
   '5': 'CNAME',
@@ -9,25 +9,25 @@ module.exports.records = {
   '15': 'MX',
   '16': 'TXT',
   '28': 'AAAA'
-}
+};
 
-module.exports.listAnswer = function (response) {
+export function listAnswer (response) {
   var results = []
-  var res = packet.parse(response)
+  const res = parse(response);
   res.answer.map(function (r) {
     results.push(r.address || r.data)
   })
   return results.join(', ') || 'nxdomain'
 }
 
-module.exports.createAnswer = function (query, answer) {
+export function createAnswer (query, answer) {
   query.header.qr = 1
   query.header.rd = 1
   query.header.ra = 1
   query.answer.push({ name: query.question[0].name, type: 1, class: 1, ttl: 30, address: answer })
 
   var buf = new Buffer(4096)
-  var wrt = packet.write(buf, query)
+  const wrt = write(buf, query);
   var res = buf.slice(0, wrt)
 
   return res
